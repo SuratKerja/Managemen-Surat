@@ -50,7 +50,7 @@ import {
 
 import * as XLSX from 'xlsx';
 import { pushToSupabase, SUPABASE_SCHEMA_SQL, testSupabaseConnectionAndSchema, clearTableInSupabase } from '../services/supabaseData';
-import { getStoredSupabaseConfig, updateSupabaseClient } from '../lib/supabase';
+import { getStoredSupabaseConfig, updateSupabaseClient, resetSupabaseConfigToDefault, DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from '../lib/supabase';
 import { SearchableSelect } from './SearchableSelect';
 
 export const MasterDataSettings: React.FC = () => {
@@ -3630,7 +3630,22 @@ export const MasterDataSettings: React.FC = () => {
                 />
               </div>
             </div>
-            <div className="flex justify-end pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  resetSupabaseConfigToDefault();
+                  setSupabaseConfigInput({
+                    url: DEFAULT_SUPABASE_URL,
+                    anonKey: DEFAULT_SUPABASE_ANON_KEY
+                  });
+                  showToast('Kredensial Supabase berhasil di-reset ke URL & Anon Key Default!', 'success');
+                }}
+                className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-slate-700" />
+                <span>🔄 Reset Kredensial Default Netlify</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -3642,6 +3657,35 @@ export const MasterDataSettings: React.FC = () => {
                 <Save className="w-3.5 h-3.5 text-white" />
                 <span>Simpan Kredensial Supabase</span>
               </button>
+            </div>
+          </div>
+
+          {/* NETLIFY DEPLOYMENT & CORS GUIDANCE BOX */}
+          <div className="p-5 rounded-2xl bg-cyan-950/90 text-cyan-50 space-y-3 border border-cyan-700/60 shadow-xl">
+            <div className="flex items-center gap-2 text-xs font-black text-cyan-300 uppercase tracking-wider">
+              <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
+              <span>PANDUAN NETLIFY: Solusi Error Load Database Supabase dari Netlify</span>
+            </div>
+            <p className="text-xs text-cyan-100 leading-relaxed">
+              Jika terjadi error saat load/save database dari domain Netlify (<code className="bg-cyan-900/80 px-1.5 py-0.5 rounded text-cyan-200 font-mono">*.netlify.app</code>), pastikan 2 langkah ringan berikut diatur:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-xs">
+              <div className="p-3 bg-cyan-900/50 rounded-xl border border-cyan-800/80 space-y-1">
+                <span className="font-extrabold text-cyan-200 block">1. Set Netlify Environment Variables</span>
+                <p className="text-[11px] text-cyan-300/90 leading-snug">
+                  Di Netlify Dashboard &gt; <strong>Site settings</strong> &gt; <strong>Environment variables</strong>, tambahkan:
+                </p>
+                <ul className="list-disc list-inside text-[11px] font-mono text-cyan-200 space-y-0.5 pt-1">
+                  <li><strong className="text-white">VITE_SUPABASE_URL</strong>: <span className="opacity-90">{DEFAULT_SUPABASE_URL}</span></li>
+                  <li><strong className="text-white">VITE_SUPABASE_ANON_KEY</strong>: <span className="opacity-90">{DEFAULT_SUPABASE_ANON_KEY.substring(0, 25)}...</span></li>
+                </ul>
+              </div>
+              <div className="p-3 bg-cyan-900/50 rounded-xl border border-cyan-800/80 space-y-1">
+                <span className="font-extrabold text-cyan-200 block">2. Izinkan CORS Domain Netlify di Supabase</span>
+                <p className="text-[11px] text-cyan-300/90 leading-snug">
+                  Di Supabase Dashboard &gt; <strong>Project Settings</strong> &gt; <strong>API</strong> &gt; <strong>CORS Origins</strong>, masukkan domain Netlify Anda (atau tanda asterisk <code className="bg-cyan-900 px-1 rounded text-cyan-200">*</code>) agar koneksi Netlify diizinkan.
+                </p>
+              </div>
             </div>
           </div>
           <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white space-y-3 border border-indigo-800 shadow-xl">

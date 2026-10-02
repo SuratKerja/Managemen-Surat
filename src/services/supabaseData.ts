@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, resetSupabaseConfigToDefault } from '../lib/supabase';
 import {
   UserAccount,
   NaskahMasukItem,
@@ -324,7 +324,21 @@ export const testSupabaseConnectionAndSchema = async (): Promise<{
   };
 };
 
-export const pullFromSupabase = async (): Promise<{
+const safeFetchTable = async (tableName: string): Promise<any[] | null> => {
+  try {
+    const res = await supabase.from(tableName).select('*');
+    if (res.error) {
+      console.warn(`[Supabase Table Warning] ${tableName}:`, res.error.message);
+      return null;
+    }
+    return res.data;
+  } catch (err: any) {
+    console.warn(`[Supabase Fetch Exception] ${tableName}:`, err?.message || err);
+    return null;
+  }
+};
+
+export const pullFromSupabase = async (isRetry = false): Promise<{
   users?: UserAccount[];
   unitKerjaList?: string[];
   naskahMasuk?: NaskahMasukItem[];
@@ -340,16 +354,29 @@ export const pullFromSupabase = async (): Promise<{
   threadNumberConfig?: ThreadNumberConfig;
 } | null> => {
   try {
-    const { data: usersData } = await supabase.from('users').select('*');
-    const { data: unitData } = await supabase.from('unit_kerja').select('*');
-    const { data: masukData } = await supabase.from('naskah_masuk').select('*');
-    const { data: keluarData } = await supabase.from('naskah_keluar').select('*');
-    const { data: threadData } = await supabase.from('berkas_thread').select('*');
-    const { data: klasifikasiArsipData } = await supabase.from('klasifikasi_arsip').select('*');
-    const { data: instansiData } = await supabase.from('instansi_wilayah').select('*');
-    const { data: klasifikasiSubData } = await supabase.from('klasifikasi_sub').select('*');
-    const { data: dropdownData } = await supabase.from('master_dropdown').select('*');
-    const { data: threadConfigData } = await supabase.from('thread_number_config').select('*').eq('id', 'default').maybeSingle();
+    let usersData = await safeFetchTable('users');
+
+    // Jika koneksi pertama gagal total (misal stale localStorage / CORS Netlify), coba reset ke default clean client
+    if (usersData === null && !isRetry) {
+      console.info('[Supabase Auto-Repair] Connection failed on Netlify, resetting to clean default client...');
+      resetSupabaseConfigToDefault();
+      return pullFromSupabase(true);
+    }
+
+    const unitData = await safeFetchTable('unit_kerja');
+    const masukData = await safeFetchTable('naskah_masuk');
+    const keluarData = await safeFetchTable('naskah_keluar');
+    const threadData = await safeFetchTable('berkas_thread');
+    const klasifikasiArsipData = await safeFetchTable('klasifikasi_arsip');
+    const instansiData = await safeFetchTable('instansi_wilayah');
+    const klasifikasiSubData = await safeFetchTable('klasifikasi_sub');
+    const dropdownData = await safeFetchTable('master_dropdown');
+
+    let threadConfigData: any = null;
+    try {
+      const res = await supabase.from('thread_number_config').select('*').eq('id', 'default').maybeSingle();
+      if (!res.error) threadConfigData = res.data;
+    } catch {}
 
     const result: any = {};
 

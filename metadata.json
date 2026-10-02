@@ -1,0 +1,6 @@
+{
+  "name": "MANAGEMENT SURAT",
+  "description": "Aplikasi Management Surat Berbasis Web - Powered by Riswan Anas",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

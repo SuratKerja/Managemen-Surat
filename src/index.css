@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@keyframes runningLight {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes shimmerSweep {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+  40%, 100% {
+    transform: translateX(300%) skewX(-20deg);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+.animate-running-light {
+  animation: runningLight 3.5s linear infinite;
+}
+
+.animate-shimmer-sweep {
+  animation: shimmerSweep 5s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4s ease-in-out infinite;
+}
+
+@keyframes lightSweep {
+  0% {
+    transform: translateX(-250%) skewX(-25deg);
+  }
+  50%, 100% {
+    transform: translateX(450%) skewX(-25deg);
+  }
+}
+
+.animate-light-sweep {
+  animation: lightSweep 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes shrinkBar {
+  0% {
+    width: 100%;
+  }
+  100% {
+    width: 0%;
+  }
+}
+

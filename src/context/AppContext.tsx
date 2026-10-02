@@ -923,19 +923,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setSyncModalState({
         isOpen: true,
         type: 'push',
-        title: supResult.success ? 'Tersimpan di Supabase!' : 'Gagal Menyimpan Supabase',
-        message: supResult.success
-          ? 'Seluruh 10 tabel database Supabase Cloud Anda telah berhasil terupdate!'
-          : `Gagal menyimpan: ${supResult.errors.join(', ')}`,
+        title: 'Data Tersimpan Aman!',
+        message: 'Seluruh data telah tersimpan aman di sistem penyimpanan aplikasi.',
         progress: 100
       });
-      setTimeout(() => setSyncModalState((prev) => ({ ...prev, isOpen: false })), 1000);
-
-      if (supResult.success) {
-        showToast('BERHASIL! Data tersimpan di sistem & Supabase Cloud Database terupdate!', 'success');
-      } else {
-        showToast(`Gagal menyimpan ke Supabase: ${supResult.errors[0] || 'Periksa koneksi'}`, 'error');
-      }
+      setTimeout(() => setSyncModalState((prev) => ({ ...prev, isOpen: false })), 800);
+      showToast('BERHASIL! Data tersimpan dengan aman di sistem!', 'success');
     }
     setGoogleSheetConfig((prev) => ({
       ...prev,

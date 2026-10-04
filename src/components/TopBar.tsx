@@ -58,12 +58,14 @@ export const TopBar: React.FC<TopBarProps> = ({
     googleSheetConfig,
     syncWithGoogleSheets,
     reloadAllData,
+    clearLocalCacheAndResync,
     isSandbox,
     dbMode
   } = useApp();
 
   const [isPulling, setIsPulling] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
 
   const isAdmin =
     currentUser?.jenisUser === 'Admin' ||
@@ -74,6 +76,12 @@ export const TopBar: React.FC<TopBarProps> = ({
     setIsPulling(true);
     await reloadAllData();
     setIsPulling(false);
+  };
+
+  const handleClearCache = async () => {
+    setIsClearingCache(true);
+    await clearLocalCacheAndResync();
+    setIsClearingCache(false);
   };
 
   const handlePushDB = async () => {
@@ -297,15 +305,27 @@ export const TopBar: React.FC<TopBarProps> = ({
         {/* Supabase Cloud DB Quick Actions */}
         <div className="hidden sm:flex items-center gap-1.5">
           {isAdmin && (
-            <button
-              onClick={handlePullDB}
-              disabled={isPulling}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 transition-colors disabled:opacity-60 cursor-pointer shadow-2xs"
-              title="Muat ulang (Pull) data terbaru dari Supabase Cloud Database"
-            >
-              <DownloadCloud className={`w-3.5 h-3.5 ${isPulling ? 'animate-bounce' : ''}`} />
-              <span className="hidden md:inline">{isPulling ? 'Menarik...' : 'Reload'}</span>
-            </button>
+            <>
+              <button
+                onClick={handleClearCache}
+                disabled={isClearingCache}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 transition-colors disabled:opacity-60 cursor-pointer shadow-2xs"
+                title="Hapus cache memori lokal peramban & tarik ulang data bersih dari Supabase Cloud"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-rose-600 ${isClearingCache ? 'animate-spin' : ''}`} />
+                <span className="hidden md:inline">{isClearingCache ? 'Membersihkan...' : 'Bersihkan Cache'}</span>
+              </button>
+
+              <button
+                onClick={handlePullDB}
+                disabled={isPulling}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200/80 transition-colors disabled:opacity-60 cursor-pointer shadow-2xs"
+                title="Muat ulang (Pull) data terbaru dari Supabase Cloud Database"
+              >
+                <DownloadCloud className={`w-3.5 h-3.5 ${isPulling ? 'animate-bounce' : ''}`} />
+                <span className="hidden md:inline">{isPulling ? 'Menarik...' : 'Reload'}</span>
+              </button>
+            </>
           )}
 
           <button

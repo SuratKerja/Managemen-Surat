@@ -155,6 +155,7 @@ interface AppContextType {
   }) => Promise<boolean>;
   pullFromGoogleSheets: (options?: { silent?: boolean }) => Promise<boolean>;
   reloadAllData: (forceRestoreDefaults?: boolean) => Promise<boolean>;
+  clearLocalCacheAndResync: () => Promise<boolean>;
   exportToGoogleSheetsExcel: () => void;
   importFromExcelFile: (file: File) => Promise<void>;
 
@@ -197,6 +198,45 @@ const STORAGE_KEYS = {
   PEMBERKASAN: 'ms_pemberkasan_threads',
   SHEETS_CONFIG: 'ms_sheets_config'
 };
+
+export const APP_CACHE_VERSION = 'v3.5-clean-supabase-sync';
+export const CACHE_VERSION_KEY = 'ms_app_cache_version';
+
+// Auto-purge cache lama di peramban pengguna agar tidak terjadi konflik data usang dengan Supabase
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    const cachedVer = window.localStorage.getItem(CACHE_VERSION_KEY);
+    if (cachedVer !== APP_CACHE_VERSION) {
+      console.info(`[App Cache] Mendeteksi versi cache usang (${cachedVer} -> ${APP_CACHE_VERSION}). Membersihkan cache lokal...`);
+      const keepUser = window.localStorage.getItem(STORAGE_KEYS.USER);
+      // Hapus seluruh data transaksi & master cache lama
+      const keysToClean = [
+        STORAGE_KEYS.NASKAH_MASUK,
+        STORAGE_KEYS.NASKAH_MASUK_UPDATED_AT,
+        STORAGE_KEYS.NASKAH_KELUAR,
+        STORAGE_KEYS.NASKAH_KELUAR_UPDATED_AT,
+        STORAGE_KEYS.PEMBERKASAN,
+        STORAGE_KEYS.USERS_LIST,
+        STORAGE_KEYS.UNIT_KERJA,
+        STORAGE_KEYS.JENIS_MASUK,
+        STORAGE_KEYS.JENIS_KELUAR,
+        STORAGE_KEYS.INSTANSI,
+        STORAGE_KEYS.KLASIFIKASI,
+        STORAGE_KEYS.STATUS_SELESAI,
+        STORAGE_KEYS.STATUS_KIRIM,
+        STORAGE_KEYS.KLASIFIKASI_ARSIP,
+        STORAGE_KEYS.THREAD_CONFIG
+      ];
+      keysToClean.forEach((k) => window.localStorage.removeItem(k));
+      if (keepUser) {
+        window.localStorage.setItem(STORAGE_KEYS.USER, keepUser);
+      }
+      window.localStorage.setItem(CACHE_VERSION_KEY, APP_CACHE_VERSION);
+    }
+  } catch (e) {
+    console.warn('[App Cache] Invalidation error:', e);
+  }
+}
 
 // Safe storage wrapper to prevent crashes in private browsing, strict office policies, or quota issues
 const safeStorage = {
@@ -436,12 +476,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Pemberkasan (Thread Tracker)
   const [berkasThreadList, setBerkasThreadList] = useState<BerkasThread[]>(() => {
-    return safeJsonParse<BerkasThread[]>(STORAGE_KEYS.PEMBERKASAN, defaultBerkasThreadList);
+    return safeJsonParse<BerkasThread[]>(STORAGE_KEYS.PEMBERKASAN, []);
   });
 
   // Records with safe parser & auto-sanitization to prevent duplicate keys
   const [naskahMasukList, setNaskahMasukListState] = useState<NaskahMasukItem[]>(() => {
-    const raw = safeJsonParse<NaskahMasukItem[]>(STORAGE_KEYS.NASKAH_MASUK, defaultNaskahMasukList);
+    const raw = safeJsonParse<NaskahMasukItem[]>(STORAGE_KEYS.NASKAH_MASUK, []);
     const cleaned = sanitizeNaskahMasuk(raw);
     safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK, JSON.stringify(cleaned));
     return cleaned;
@@ -455,7 +495,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const [naskahKeluarList, setNaskahKeluarListState] = useState<NaskahKeluarItem[]>(() => {
-    const raw = safeJsonParse<NaskahKeluarItem[]>(STORAGE_KEYS.NASKAH_KELUAR, defaultNaskahKeluarList);
+    const raw = safeJsonParse<NaskahKeluarItem[]>(STORAGE_KEYS.NASKAH_KELUAR, []);
     const cleaned = sanitizeNaskahKeluar(raw);
     safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR, JSON.stringify(cleaned));
     return cleaned;
@@ -577,7 +617,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEYS.UNIT_KERJA, JSON.stringify(unitKerjaList));
-    pushToSupabase({ unitKerjaList });
   }, [unitKerjaList]);
 
   useEffect(() => {
@@ -590,32 +629,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEYS.JENIS_MASUK, JSON.stringify(jenisNaskahMasuk));
-    pushToSupabase({ jenisNaskahMasuk });
   }, [jenisNaskahMasuk]);
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEYS.JENIS_KELUAR, JSON.stringify(jenisNaskahKeluar));
-    pushToSupabase({ jenisNaskahKeluar });
   }, [jenisNaskahKeluar]);
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEYS.INSTANSI, JSON.stringify(instansiWilayah));
-    pushToSupabase({ instansiWilayah });
   }, [instansiWilayah]);
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEYS.KLASIFIKASI, JSON.stringify(klasifikasiSub));
-    pushToSupabase({ klasifikasiSub });
   }, [klasifikasiSub]);
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEYS.STATUS_SELESAI, JSON.stringify(statusPenyelesaian));
-    pushToSupabase({ statusPenyelesaian });
   }, [statusPenyelesaian]);
 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEYS.STATUS_KIRIM, JSON.stringify(statusKirim));
-    pushToSupabase({ statusKirim });
   }, [statusKirim]);
 
   useEffect(() => {
@@ -641,65 +674,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     safeStorage.setItem(STORAGE_KEYS.SHEETS_CONFIG, JSON.stringify(googleSheetConfig));
   }, [googleSheetConfig]);
-
-  // Real-time Auto-Save ke Supabase PostgreSQL saat ada Tambah Data, Edit, atau Hapus Data
-  const isSupabaseInitialMount = React.useRef(true);
-  useEffect(() => {
-    if (isSupabaseInitialMount.current) {
-      isSupabaseInitialMount.current = false;
-      return;
-    }
-
-    // Mencegah auto-save menimpa Supabase sebelum data awal selesai ditarik (mencegah data lama di localStorage menghidupkan kembali data yang sudah dihapus di Supabase)
-    if (!hasPulledInitialData) {
-      return;
-    }
-
-    // Jika Mode Sandbox Aktif, proteksi database production dengan tidak menjadwalkan push
-    if (isSandboxMode()) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      pushToSupabase({
-        naskahMasuk: naskahMasukList,
-        naskahKeluar: naskahKeluarList,
-        berkasThreadList,
-        users,
-        unitKerjaList,
-        klasifikasiArsipList,
-        instansiWilayah,
-        klasifikasiSub,
-        jenisNaskahMasuk,
-        jenisNaskahKeluar,
-        statusPenyelesaian,
-        statusKirim,
-        threadNumberConfig
-      }).then((res) => {
-        if (res.success) {
-          console.log('⚡ [SUPABASE REALTIME AUTO-SAVE] Data berhasil disimpan ke Supabase Database!');
-        } else {
-          console.warn('[SUPABASE REALTIME AUTO-SAVE WARNING]:', res.errors);
-        }
-      });
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [
-    naskahMasukList,
-    naskahKeluarList,
-    berkasThreadList,
-    users,
-    unitKerjaList,
-    klasifikasiArsipList,
-    instansiWilayah,
-    klasifikasiSub,
-    jenisNaskahMasuk,
-    jenisNaskahKeluar,
-    statusPenyelesaian,
-    statusKirim,
-    threadNumberConfig
-  ]);
 
   // Database Mode Switcher & Sandbox Reset Helper
   const setDbMode = (mode: DatabaseMode) => {
@@ -1174,16 +1148,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         progress: 40
       });
       const supabaseResult = await pullFromSupabase();
-      if (supabaseResult && (supabaseResult.naskahMasuk?.length || supabaseResult.naskahKeluar?.length || supabaseResult.users?.length)) {
-        if (supabaseResult.naskahMasuk) {
+      if (supabaseResult) {
+        if (supabaseResult.naskahMasuk !== undefined) {
           setNaskahMasukList(supabaseResult.naskahMasuk);
           safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK, JSON.stringify(supabaseResult.naskahMasuk));
         }
-        if (supabaseResult.naskahKeluar) {
+        if (supabaseResult.naskahKeluar !== undefined) {
           setNaskahKeluarList(supabaseResult.naskahKeluar);
           safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR, JSON.stringify(supabaseResult.naskahKeluar));
         }
-        if (supabaseResult.berkasThreadList) {
+        if (supabaseResult.berkasThreadList !== undefined) {
           setBerkasThreadList(supabaseResult.berkasThreadList);
           safeStorage.setItem(STORAGE_KEYS.PEMBERKASAN, JSON.stringify(supabaseResult.berkasThreadList));
         }
@@ -1227,15 +1201,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       progress: 50
     });
 
-    // 2. Load from defaults if empty or requested
-    const targetMasuk =
-      forceRestoreDefaults || naskahMasukList.length === 0
-        ? defaultNaskahMasukList
-        : naskahMasukList;
-    const targetKeluar =
-      forceRestoreDefaults || naskahKeluarList.length === 0
-        ? defaultNaskahKeluarList
-        : naskahKeluarList;
+    const targetMasuk = forceRestoreDefaults ? [] : naskahMasukList;
+    const targetKeluar = forceRestoreDefaults ? [] : naskahKeluarList;
 
     setNaskahMasukList(targetMasuk);
     setNaskahKeluarList(targetKeluar);
@@ -1248,8 +1215,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       safeStorage.setItem(STORAGE_KEYS.KLASIFIKASI_ARSIP, JSON.stringify(defaultKlasifikasiArsip));
       setThreadNumberConfig(defaultThreadNumberConfig);
       safeStorage.setItem(STORAGE_KEYS.THREAD_CONFIG, JSON.stringify(defaultThreadNumberConfig));
-      setBerkasThreadList(defaultBerkasThreadList);
-      safeStorage.setItem(STORAGE_KEYS.PEMBERKASAN, JSON.stringify(defaultBerkasThreadList));
+      setBerkasThreadList([]);
+      safeStorage.setItem(STORAGE_KEYS.PEMBERKASAN, JSON.stringify([]));
     }
 
     setSyncModalState({
@@ -1266,6 +1233,119 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       'success'
     );
     return true;
+  };
+
+  /**
+   * Membersihkan total cache browser lokal (localStorage) dan menarik ulang data murni dari Supabase Cloud
+   */
+  const clearLocalCacheAndResync = async (): Promise<boolean> => {
+    setSyncModalState({
+      isOpen: true,
+      type: 'pull',
+      title: 'Membersihkan Cache & Memuat Supabase',
+      message: 'Menghapus seluruh cache lokal di peramban dan mengambil data terbaru dari Supabase Cloud...',
+      progress: 30
+    });
+
+    try {
+      const preserveUser = safeStorage.getItem(STORAGE_KEYS.USER);
+      const keysToClear = [
+        STORAGE_KEYS.NASKAH_MASUK,
+        STORAGE_KEYS.NASKAH_MASUK_UPDATED_AT,
+        STORAGE_KEYS.NASKAH_KELUAR,
+        STORAGE_KEYS.NASKAH_KELUAR_UPDATED_AT,
+        STORAGE_KEYS.PEMBERKASAN,
+        STORAGE_KEYS.USERS_LIST,
+        STORAGE_KEYS.UNIT_KERJA,
+        STORAGE_KEYS.JENIS_MASUK,
+        STORAGE_KEYS.JENIS_KELUAR,
+        STORAGE_KEYS.INSTANSI,
+        STORAGE_KEYS.KLASIFIKASI,
+        STORAGE_KEYS.STATUS_SELESAI,
+        STORAGE_KEYS.STATUS_KIRIM,
+        STORAGE_KEYS.KLASIFIKASI_ARSIP,
+        STORAGE_KEYS.THREAD_CONFIG
+      ];
+      keysToClear.forEach((k) => safeStorage.removeItem(k));
+      if (preserveUser) {
+        safeStorage.setItem(STORAGE_KEYS.USER, preserveUser);
+      }
+
+      setNaskahMasukListState([]);
+      setNaskahKeluarListState([]);
+      setBerkasThreadList([]);
+
+      const spData = await pullFromSupabase();
+      if (spData) {
+        if (spData.users && spData.users.length > 0) {
+          setUsers(spData.users);
+          safeStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(spData.users));
+        }
+        if (spData.unitKerjaList && spData.unitKerjaList.length > 0) {
+          setUnitKerjaList(spData.unitKerjaList);
+          safeStorage.setItem(STORAGE_KEYS.UNIT_KERJA, JSON.stringify(spData.unitKerjaList));
+        }
+        if (spData.jenisNaskahMasuk) {
+          setJenisNaskahMasuk(spData.jenisNaskahMasuk);
+          safeStorage.setItem(STORAGE_KEYS.JENIS_MASUK, JSON.stringify(spData.jenisNaskahMasuk));
+        }
+        if (spData.jenisNaskahKeluar) {
+          setJenisNaskahKeluar(spData.jenisNaskahKeluar);
+          safeStorage.setItem(STORAGE_KEYS.JENIS_KELUAR, JSON.stringify(spData.jenisNaskahKeluar));
+        }
+        if (spData.statusPenyelesaian) {
+          setStatusPenyelesaian(spData.statusPenyelesaian);
+          safeStorage.setItem(STORAGE_KEYS.STATUS_SELESAI, JSON.stringify(spData.statusPenyelesaian));
+        }
+        if (spData.statusKirim) {
+          setStatusKirim(spData.statusKirim);
+          safeStorage.setItem(STORAGE_KEYS.STATUS_KIRIM, JSON.stringify(spData.statusKirim));
+        }
+        if (spData.instansiWilayah) {
+          setInstansiWilayah(spData.instansiWilayah);
+          safeStorage.setItem(STORAGE_KEYS.INSTANSI, JSON.stringify(spData.instansiWilayah));
+        }
+        if (spData.klasifikasiSub) {
+          setKlasifikasiSub(spData.klasifikasiSub);
+          safeStorage.setItem(STORAGE_KEYS.KLASIFIKASI, JSON.stringify(spData.klasifikasiSub));
+        }
+        if (spData.naskahMasuk !== undefined) {
+          setNaskahMasukListState(spData.naskahMasuk);
+          safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK, JSON.stringify(spData.naskahMasuk));
+        }
+        if (spData.naskahKeluar !== undefined) {
+          setNaskahKeluarListState(spData.naskahKeluar);
+          safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR, JSON.stringify(spData.naskahKeluar));
+        }
+        if (spData.berkasThreadList !== undefined) {
+          setBerkasThreadList(spData.berkasThreadList);
+          safeStorage.setItem(STORAGE_KEYS.PEMBERKASAN, JSON.stringify(spData.berkasThreadList));
+        }
+        if (spData.klasifikasiArsipList && spData.klasifikasiArsipList.length > 0) {
+          setKlasifikasiArsipList(spData.klasifikasiArsipList);
+          safeStorage.setItem(STORAGE_KEYS.KLASIFIKASI_ARSIP, JSON.stringify(spData.klasifikasiArsipList));
+        }
+        if (spData.threadNumberConfig) {
+          setThreadNumberConfig(spData.threadNumberConfig);
+          safeStorage.setItem(STORAGE_KEYS.THREAD_CONFIG, JSON.stringify(spData.threadNumberConfig));
+        }
+      }
+
+      setSyncModalState({
+        isOpen: true,
+        type: 'reload',
+        title: 'Cache Bersih & Sinkron Selesai!',
+        message: 'Cache lama di peramban telah dibersihkan dan diganti dengan data terbaru langsung dari Supabase Cloud.',
+        progress: 100
+      });
+      setTimeout(() => setSyncModalState((prev) => ({ ...prev, isOpen: false })), 900);
+      showToast('Cache peramban berhasil dibersihkan & data terbaru ditarik dari Supabase!', 'success');
+      return true;
+    } catch (e) {
+      setSyncModalState((prev) => ({ ...prev, isOpen: false }));
+      showToast('Gagal membersihkan cache atau memuat data Supabase.', 'error');
+      return false;
+    }
   };
 
   // Helper generator nomor thread otomatis
@@ -1632,6 +1712,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK, JSON.stringify(cleaned));
     safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK_UPDATED_AT, String(Date.now()));
 
+    // Langsung simpan ke Supabase jika bukan mode sandbox
+    if (!isSandboxMode()) {
+      await pushToSupabase({ naskahMasuk: cleaned });
+    }
+
     // Otomatis sinkronisasi ke Google Sheet jika webhook terpasang
     if (googleSheetConfig.webhookUrl && String(googleSheetConfig.webhookUrl).trim().length > 0) {
       syncWithGoogleSheets({ naskahMasuk: cleaned, silent: true });
@@ -1657,6 +1742,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setNaskahKeluarListState(cleaned);
     safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR, JSON.stringify(cleaned));
     safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR_UPDATED_AT, String(Date.now()));
+
+    // Langsung simpan ke Supabase jika bukan mode sandbox
+    if (!isSandboxMode()) {
+      await pushToSupabase({ naskahKeluar: cleaned });
+    }
 
     // Otomatis sinkronisasi ke Google Sheet jika webhook terpasang
     if (googleSheetConfig.webhookUrl && String(googleSheetConfig.webhookUrl).trim().length > 0) {
@@ -1742,6 +1832,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         syncWithGoogleSheets,
         pullFromGoogleSheets,
         reloadAllData,
+        clearLocalCacheAndResync,
         exportToGoogleSheetsExcel,
         importFromExcelFile,
         toasts,

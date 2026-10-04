@@ -39,16 +39,22 @@ export const setAutoSandboxEnabled = (enabled: boolean): void => {
  * Dapatkan mode database saat ini ('sandbox' | 'production' | 'staging')
  */
 export const getDatabaseMode = (): DatabaseMode => {
-  if (typeof localStorage === 'undefined') return 'sandbox';
+  if (typeof localStorage === 'undefined') return 'production';
+
+  // Jika aplikasi di-hosting di Netlify / domain produksi publik:
+  // Nilai default mutlak adalah 'production' (terkoneksi langsung dengan Supabase)
+  if (!isRunningInAIStudio()) {
+    const customMode = localStorage.getItem('CUSTOM_SUPABASE_MODE') as DatabaseMode | null;
+    return customMode || 'production';
+  }
+
+  // Jika di mode desain / preview Google AI Studio:
+  // Nilai default adalah 'sandbox' (mode terisolasi dari database production)
   const customMode = localStorage.getItem('CUSTOM_SUPABASE_MODE') as DatabaseMode | null;
-  if (customMode && (customMode === 'sandbox' || customMode === 'production' || customMode === 'staging')) {
+  if (customMode && (customMode === 'sandbox' || customMode === 'production')) {
     return customMode;
   }
-  // Default pintar: Jika di AI Studio dan auto-sandbox aktif, default ke 'sandbox'
-  if (isAutoSandboxEnabled() && isRunningInAIStudio()) {
-    return 'sandbox';
-  }
-  return 'production';
+  return 'sandbox';
 };
 
 /**

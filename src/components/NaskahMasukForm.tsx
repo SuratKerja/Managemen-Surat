@@ -76,6 +76,7 @@ export const NaskahMasukForm: React.FC = () => {
     naskahMasukList,
     setNaskahMasukList,
     saveNaskahMasukDirectly,
+    deleteNaskahMasuk,
     jenisNaskahMasuk,
     instansiWilayah,
     klasifikasiSub,
@@ -849,13 +850,10 @@ const getStatusMasukBadgeClass = (statusStr?: string) => {
 
   // Delete Data
   const handleDelete = async (id: string) => {
-    const updatedList = naskahMasukList.filter((item) => item.id !== id);
-    setNaskahMasukList(updatedList);
+    await deleteNaskahMasuk(id);
     if (selectedId === id) {
       handleResetForm();
     }
-    showToast('Data berhasil dihapus dari database', 'info');
-    await syncWithGoogleSheets({ naskahMasuk: updatedList });
   };
 
   // Search handler with Toast messages

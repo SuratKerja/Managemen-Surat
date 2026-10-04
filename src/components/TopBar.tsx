@@ -52,11 +52,14 @@ export const TopBar: React.FC<TopBarProps> = ({
 }) => {
   const {
     activeTab,
+    setActiveTab,
     currentUser,
     logout,
     googleSheetConfig,
     syncWithGoogleSheets,
-    reloadAllData
+    reloadAllData,
+    isSandbox,
+    dbMode
   } = useApp();
 
   const [isPulling, setIsPulling] = useState(false);
@@ -264,6 +267,33 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Right Section: Cloud Actions, Fullscreen Button & User Quick Profile */}
       <div className="flex items-center gap-2 shrink-0">
+        {/* Environment / Database Mode Badge */}
+        <button
+          onClick={() => setActiveTab('settingSupabase')}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+            isSandbox
+              ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 shadow-2xs'
+              : 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100 shadow-2xs'
+          }`}
+          title={
+            isSandbox
+              ? 'Mode Sandbox Aktif: Database Production Supabase aman & tidak tersentuh. Klik untuk kelola mode di Pengaturan.'
+              : 'Mode Supabase Production Live: Terhubung ke database cloud. Klik untuk kelola mode di Pengaturan.'
+          }
+        >
+          {isSandbox ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="text-[11px] font-black tracking-tight">🛡️ Sandbox (Prod Aman)</span>
+            </>
+          ) : (
+            <>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+              <span className="text-[11px] font-black tracking-tight">🌐 Prod Live</span>
+            </>
+          )}
+        </button>
+
         {/* Supabase Cloud DB Quick Actions */}
         <div className="hidden sm:flex items-center gap-1.5">
           {isAdmin && (

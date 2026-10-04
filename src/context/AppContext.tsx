@@ -1,6 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { CircularSyncModal, CircularSyncModalProps } from '../components/CircularSyncModal';
-import { pullFromSupabase, pushToSupabase, normalizeListIds } from '../services/supabaseData';
+import { pullFromSupabase, pushToSupabase, normalizeListIds, deleteRecordFromSupabase } from '../services/supabaseData';
+import {
+  DatabaseMode,
+  getDatabaseMode,
+  setDatabaseMode,
+  isSandboxMode,
+  isAutoSandboxEnabled,
+  setAutoSandboxEnabled,
+  isRunningInAIStudio
+} from '../lib/supabase';
 import {
   UserAccount,
   InstansiWilayah,
@@ -123,9 +132,11 @@ interface AppContextType {
   naskahMasukList: NaskahMasukItem[];
   setNaskahMasukList: React.Dispatch<React.SetStateAction<NaskahMasukItem[]>>;
   saveNaskahMasukDirectly: (list: NaskahMasukItem[]) => Promise<boolean>;
+  deleteNaskahMasuk: (id: string) => Promise<boolean>;
   naskahKeluarList: NaskahKeluarItem[];
   setNaskahKeluarList: React.Dispatch<React.SetStateAction<NaskahKeluarItem[]>>;
   saveNaskahKeluarDirectly: (list: NaskahKeluarItem[]) => Promise<boolean>;
+  deleteNaskahKeluar: (id: string) => Promise<boolean>;
 
   // Google Sheets Config
   googleSheetConfig: GoogleSheetConfig;
@@ -155,6 +166,14 @@ interface AppContextType {
   // Helper Search
   searchNaskahMasukByNomor: (nomor: string) => NaskahMasukItem | null;
   searchNaskahKeluarByNomor: (nomor: string) => NaskahKeluarItem | null;
+
+  // Database Mode & Isolation Settings (Sandbox vs Production)
+  dbMode: DatabaseMode;
+  setDbMode: (mode: DatabaseMode) => void;
+  isSandbox: boolean;
+  autoSandbox: boolean;
+  setAutoSandbox: (enabled: boolean) => void;
+  resetSandboxToDemoData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -342,6 +361,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   // Initialize Auth with safe defaults
+  // Database Mode State & Sandbox Isolation
+  const [dbMode, setDbModeState] = useState<DatabaseMode>(() => getDatabaseMode());
+  const [autoSandbox, setAutoSandboxState] = useState<boolean>(() => isAutoSandboxEnabled());
+  const isSandbox = dbMode === 'sandbox';
+  const [hasPulledInitialData, setHasPulledInitialData] = useState<boolean>(false);
+
   const [users, setUsers] = useState<UserAccount[]>(() => {
     const saved = safeStorage.getItem(STORAGE_KEYS.USERS_LIST);
     if (!saved) return defaultUsers;
@@ -456,6 +481,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     (async () => {
       const spData = await pullFromSupabase();
+      setHasPulledInitialData(true);
       if (spData) {
         let needsSeed = false;
         const seedPayload: any = {};
@@ -463,7 +489,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (spData.users && spData.users.length > 0) {
           setUsers(spData.users);
           safeStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(spData.users));
-        } else {
+        } else if (spData.users === undefined) {
           needsSeed = true;
           seedPayload.users = defaultUsers;
         }
@@ -471,7 +497,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (spData.unitKerjaList && spData.unitKerjaList.length > 0) {
           setUnitKerjaList(spData.unitKerjaList);
           safeStorage.setItem(STORAGE_KEYS.UNIT_KERJA, JSON.stringify(spData.unitKerjaList));
-        } else {
+        } else if (spData.unitKerjaList === undefined) {
           needsSeed = true;
           seedPayload.unitKerjaList = defaultUnitKerjaList;
         }
@@ -479,96 +505,67 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (spData.jenisNaskahMasuk && spData.jenisNaskahMasuk.length > 0) {
           setJenisNaskahMasuk(spData.jenisNaskahMasuk);
           safeStorage.setItem(STORAGE_KEYS.JENIS_MASUK, JSON.stringify(spData.jenisNaskahMasuk));
-        } else {
-          needsSeed = true;
-          seedPayload.jenisNaskahMasuk = defaultJenisNaskahMasuk;
         }
 
         if (spData.jenisNaskahKeluar && spData.jenisNaskahKeluar.length > 0) {
           setJenisNaskahKeluar(spData.jenisNaskahKeluar);
           safeStorage.setItem(STORAGE_KEYS.JENIS_KELUAR, JSON.stringify(spData.jenisNaskahKeluar));
-        } else {
-          needsSeed = true;
-          seedPayload.jenisNaskahKeluar = defaultJenisNaskahKeluar;
         }
 
         if (spData.statusPenyelesaian && spData.statusPenyelesaian.length > 0) {
           setStatusPenyelesaian(spData.statusPenyelesaian);
           safeStorage.setItem(STORAGE_KEYS.STATUS_SELESAI, JSON.stringify(spData.statusPenyelesaian));
-        } else {
-          needsSeed = true;
-          seedPayload.statusPenyelesaian = defaultStatusPenyelesaian;
         }
 
         if (spData.statusKirim && spData.statusKirim.length > 0) {
           setStatusKirim(spData.statusKirim);
           safeStorage.setItem(STORAGE_KEYS.STATUS_KIRIM, JSON.stringify(spData.statusKirim));
-        } else {
-          needsSeed = true;
-          seedPayload.statusKirim = defaultStatusKirim;
         }
 
         if (spData.instansiWilayah && spData.instansiWilayah.length > 0) {
           setInstansiWilayah(spData.instansiWilayah);
           safeStorage.setItem(STORAGE_KEYS.INSTANSI, JSON.stringify(spData.instansiWilayah));
-        } else {
-          needsSeed = true;
-          seedPayload.instansiWilayah = defaultInstansiWilayah;
         }
 
         if (spData.klasifikasiSub && spData.klasifikasiSub.length > 0) {
           setKlasifikasiSub(spData.klasifikasiSub);
           safeStorage.setItem(STORAGE_KEYS.KLASIFIKASI, JSON.stringify(spData.klasifikasiSub));
-        } else {
-          needsSeed = true;
-          seedPayload.klasifikasiSub = defaultKlasifikasiSub;
         }
 
-        if (spData.naskahMasuk && spData.naskahMasuk.length > 0) {
+        // Untuk Naskah Masuk, Naskah Keluar, & Berkas Thread: hormati status di Supabase bahkan jika kosong [] (sudah dihapus pengguna)
+        if (spData.naskahMasuk !== undefined) {
           setNaskahMasukList(spData.naskahMasuk);
           safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK, JSON.stringify(spData.naskahMasuk));
-        } else {
-          needsSeed = true;
-          seedPayload.naskahMasuk = defaultNaskahMasukList;
         }
 
-        if (spData.naskahKeluar && spData.naskahKeluar.length > 0) {
+        if (spData.naskahKeluar !== undefined) {
           setNaskahKeluarList(spData.naskahKeluar);
           safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR, JSON.stringify(spData.naskahKeluar));
-        } else {
-          needsSeed = true;
-          seedPayload.naskahKeluar = defaultNaskahKeluarList;
         }
 
-        if (spData.berkasThreadList && spData.berkasThreadList.length > 0) {
+        if (spData.berkasThreadList !== undefined) {
           setBerkasThreadList(spData.berkasThreadList);
           safeStorage.setItem(STORAGE_KEYS.PEMBERKASAN, JSON.stringify(spData.berkasThreadList));
-        } else {
-          needsSeed = true;
-          seedPayload.berkasThreadList = defaultBerkasThreadList;
         }
 
         if (spData.klasifikasiArsipList && spData.klasifikasiArsipList.length > 0) {
           setKlasifikasiArsipList(spData.klasifikasiArsipList);
           safeStorage.setItem(STORAGE_KEYS.KLASIFIKASI_ARSIP, JSON.stringify(spData.klasifikasiArsipList));
-        } else {
-          needsSeed = true;
-          seedPayload.klasifikasiArsipList = defaultKlasifikasiArsip;
         }
 
         if (spData.threadNumberConfig) {
           setThreadNumberConfig(spData.threadNumberConfig);
           safeStorage.setItem(STORAGE_KEYS.THREAD_CONFIG, JSON.stringify(spData.threadNumberConfig));
-        } else {
-          needsSeed = true;
-          seedPayload.threadNumberConfig = defaultThreadNumberConfig;
         }
 
         if (needsSeed) {
           pushToSupabase(seedPayload);
         }
-      } else if (googleSheetConfig.webhookUrl && String(googleSheetConfig.webhookUrl).trim().length > 0) {
-        pullFromGoogleSheets({ silent: true });
+      } else {
+        setHasPulledInitialData(true);
+        if (googleSheetConfig.webhookUrl && String(googleSheetConfig.webhookUrl).trim().length > 0) {
+          pullFromGoogleSheets({ silent: true });
+        }
       }
     })();
   }, []);
@@ -653,6 +650,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
 
+    // Mencegah auto-save menimpa Supabase sebelum data awal selesai ditarik (mencegah data lama di localStorage menghidupkan kembali data yang sudah dihapus di Supabase)
+    if (!hasPulledInitialData) {
+      return;
+    }
+
+    // Jika Mode Sandbox Aktif, proteksi database production dengan tidak menjadwalkan push
+    if (isSandboxMode()) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       pushToSupabase({
         naskahMasuk: naskahMasukList,
@@ -693,6 +700,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     statusKirim,
     threadNumberConfig
   ]);
+
+  // Database Mode Switcher & Sandbox Reset Helper
+  const setDbMode = (mode: DatabaseMode) => {
+    setDatabaseMode(mode);
+    setDbModeState(mode);
+    if (mode === 'sandbox') {
+      showToast('🛡️ Mode Sandbox AI Studio Aktif: Database Production aman & terisolasi!', 'info');
+    } else if (mode === 'production') {
+      showToast('🌐 Mode Supabase Production Aktif: Aplikasi terhubung ke database live cloud.', 'success');
+      pullFromSupabase().then((spData) => {
+        if (spData) {
+          if (spData.users && spData.users.length > 0) setUsers(spData.users);
+          if (spData.naskahMasuk) setNaskahMasukList(spData.naskahMasuk);
+          if (spData.naskahKeluar) setNaskahKeluarList(spData.naskahKeluar);
+          if (spData.berkasThreadList) setBerkasThreadList(spData.berkasThreadList);
+        }
+      });
+    } else {
+      showToast('🧪 Mode Supabase Staging/Development DB Aktif.', 'info');
+    }
+  };
+
+  const setAutoSandbox = (enabled: boolean) => {
+    setAutoSandboxEnabled(enabled);
+    setAutoSandboxState(enabled);
+    if (enabled && isRunningInAIStudio()) {
+      setDbMode('sandbox');
+    }
+  };
+
+  const resetSandboxToDemoData = () => {
+    setUsers(defaultUsers);
+    setUnitKerjaList(defaultUnitKerjaList);
+    setJenisNaskahMasuk(defaultJenisNaskahMasuk);
+    setJenisNaskahKeluar(defaultJenisNaskahKeluar);
+    setInstansiWilayah(defaultInstansiWilayah);
+    setKlasifikasiSub(defaultKlasifikasiSub);
+    setStatusPenyelesaian(defaultStatusPenyelesaian);
+    setStatusKirim(defaultStatusKirim);
+    setKlasifikasiArsipList(defaultKlasifikasiArsip);
+    setThreadNumberConfig(defaultThreadNumberConfig);
+    setBerkasThreadList(defaultBerkasThreadList);
+    setNaskahMasukList(defaultNaskahMasukList);
+    setNaskahKeluarList(defaultNaskahKeluarList);
+    safeStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(defaultUsers));
+    safeStorage.setItem(STORAGE_KEYS.UNIT_KERJA, JSON.stringify(defaultUnitKerjaList));
+    safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK, JSON.stringify(defaultNaskahMasukList));
+    safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR, JSON.stringify(defaultNaskahKeluarList));
+    safeStorage.setItem(STORAGE_KEYS.PEMBERKASAN, JSON.stringify(defaultBerkasThreadList));
+    showToast('✨ Data pengujian lokal Sandbox berhasil di-reset ke data bawaan!', 'success');
+  };
 
   // Toast functions
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -1408,10 +1466,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     showToast('Data Pemberkasan (Thread) berhasil diperbarui!', 'success');
   };
 
-  const deleteBerkasThread = (id: string) => {
+  const deleteBerkasThread = async (id: string) => {
     const remainingThreads = berkasThreadList.filter((item) => item.id !== id);
     setBerkasThreadList(remainingThreads);
     safeStorage.setItem(STORAGE_KEYS.PEMBERKASAN, JSON.stringify(remainingThreads));
+    await deleteRecordFromSupabase('berkas_thread', id);
     if (googleSheetConfig.webhookUrl && String(googleSheetConfig.webhookUrl).trim().length > 0) {
       syncWithGoogleSheets({ berkasThreadList: remainingThreads, silent: true });
     }
@@ -1580,6 +1639,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return true;
   };
 
+  const deleteNaskahMasuk = async (id: string): Promise<boolean> => {
+    const updated = naskahMasukList.filter((m) => m.id !== id);
+    setNaskahMasukListState(updated);
+    safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK, JSON.stringify(updated));
+    safeStorage.setItem(STORAGE_KEYS.NASKAH_MASUK_UPDATED_AT, String(Date.now()));
+    await deleteRecordFromSupabase('naskah_masuk', id);
+    if (googleSheetConfig.webhookUrl && String(googleSheetConfig.webhookUrl).trim().length > 0) {
+      syncWithGoogleSheets({ naskahMasuk: updated, silent: true });
+    }
+    showToast('Data Naskah Masuk berhasil dihapus dari database.', 'info');
+    return true;
+  };
+
   const saveNaskahKeluarDirectly = async (list: NaskahKeluarItem[]): Promise<boolean> => {
     const cleaned = sanitizeNaskahKeluar(list);
     setNaskahKeluarListState(cleaned);
@@ -1590,6 +1662,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (googleSheetConfig.webhookUrl && String(googleSheetConfig.webhookUrl).trim().length > 0) {
       syncWithGoogleSheets({ naskahKeluar: cleaned, silent: true });
     }
+    return true;
+  };
+
+  const deleteNaskahKeluar = async (id: string): Promise<boolean> => {
+    const updated = naskahKeluarList.filter((k) => k.id !== id);
+    setNaskahKeluarListState(updated);
+    safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR, JSON.stringify(updated));
+    safeStorage.setItem(STORAGE_KEYS.NASKAH_KELUAR_UPDATED_AT, String(Date.now()));
+    await deleteRecordFromSupabase('naskah_keluar', id);
+    if (googleSheetConfig.webhookUrl && String(googleSheetConfig.webhookUrl).trim().length > 0) {
+      syncWithGoogleSheets({ naskahKeluar: updated, silent: true });
+    }
+    showToast('Data Naskah Keluar berhasil dihapus dari database.', 'info');
     return true;
   };
 
@@ -1647,9 +1732,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         naskahMasukList,
         setNaskahMasukList,
         saveNaskahMasukDirectly,
+        deleteNaskahMasuk,
         naskahKeluarList,
         setNaskahKeluarList,
         saveNaskahKeluarDirectly,
+        deleteNaskahKeluar,
         googleSheetConfig,
         setGoogleSheetConfig,
         syncWithGoogleSheets,
@@ -1661,7 +1748,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         showToast,
         removeToast,
         searchNaskahMasukByNomor,
-        searchNaskahKeluarByNomor
+        searchNaskahKeluarByNomor,
+        dbMode,
+        setDbMode,
+        isSandbox,
+        autoSandbox,
+        setAutoSandbox,
+        resetSandboxToDemoData
       }}
     >
       {children}

@@ -73,6 +73,12 @@ export const SettingsView: React.FC = () => {
     setJenisNaskahKeluar,
     showToast,
     syncWithGoogleSheets,
+    dbMode,
+    setDbMode,
+    isSandbox,
+    autoSandbox,
+    setAutoSandbox,
+    resetSandboxToDemoData,
     currentUser,
     slaConfig,
     setSlaConfig
@@ -874,7 +880,7 @@ export const SettingsView: React.FC = () => {
                 <span>Pengaturan Supabase Cloud Database (PostgreSQL)</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Verifikasi status koneksi, jalankan diagnosa tabel, atau salin script SQL DDL untuk setup awal di Supabase.
+                Kelola mode koneksi, isolasi proteksi database production, konfigurasi credentials, dan diagnosa tabel.
               </p>
             </div>
 
@@ -896,6 +902,169 @@ export const SettingsView: React.FC = () => {
                 <RefreshCw className={`w-4 h-4 ${supabaseDiag.running ? 'animate-spin' : ''}`} />
                 <span>Jalankan Diagnosa DB</span>
               </button>
+            </div>
+          </div>
+
+          {/* PANEL PROTEKSI LINGKUNGAN & MODE DATABASE */}
+          <div className="bg-gradient-to-br from-slate-50 to-cyan-50/40 p-6 rounded-2xl border-2 border-cyan-200/80 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wide uppercase bg-cyan-100 text-cyan-800 mb-1.5">
+                  <Shield className="w-3.5 h-3.5 text-cyan-700" />
+                  <span>Proteksi Lingkungan &amp; Isolasi Data</span>
+                </div>
+                <h4 className="text-base font-extrabold text-slate-900">
+                  Mode Operasi Database (Sandbox vs Production)
+                </h4>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Pilih mode agar proses login, desain ulang, atau perbaikan di AI Studio tidak mengotori atau merusak database production.
+                </p>
+              </div>
+
+              {/* Status Badge */}
+              <div className="shrink-0">
+                {isSandbox ? (
+                  <div className="px-4 py-2 rounded-xl bg-amber-500 text-white shadow-md flex items-center gap-2 text-xs font-black">
+                    <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
+                    <span>🛡️ SANDBOX AKTIF (DB PROD AMAN)</span>
+                  </div>
+                ) : (
+                  <div className="px-4 py-2 rounded-xl bg-emerald-600 text-white shadow-md flex items-center gap-2 text-xs font-black">
+                    <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
+                    <span>🌐 SUPABASE PRODUCTION (LIVE)</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Mode Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {/* Card 1: Mode Sandbox */}
+              <div
+                onClick={() => setDbMode('sandbox')}
+                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                  dbMode === 'sandbox'
+                    ? 'bg-amber-50/90 border-amber-500 shadow-md'
+                    : 'bg-white border-slate-200 hover:border-amber-300'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-extrabold text-xs text-amber-900 flex items-center gap-1.5">
+                      <Shield className="w-4 h-4 text-amber-600" />
+                      <span>1. Mode Sandbox AI Studio</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-800">
+                      Rekomendasi
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Database Supabase Production <strong>100% diputus &amp; aman</strong>. Data disimpan di memori browser lokal. Bebas login, input naskah, atau redesain layout tanpa merusak data asli.
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-amber-200/60 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-amber-800">
+                    {dbMode === 'sandbox' ? '● Sedang Digunakan' : 'Klik untuk Aktifkan'}
+                  </span>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${dbMode === 'sandbox' ? 'border-amber-600 bg-amber-600' : 'border-slate-300'}`}>
+                    {dbMode === 'sandbox' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Mode Production */}
+              <div
+                onClick={() => setDbMode('production')}
+                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                  dbMode === 'production'
+                    ? 'bg-emerald-50/90 border-emerald-500 shadow-md'
+                    : 'bg-white border-slate-200 hover:border-emerald-300'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-extrabold text-xs text-emerald-950 flex items-center gap-1.5">
+                      <Database className="w-4 h-4 text-emerald-600" />
+                      <span>2. Supabase Production</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-200 text-emerald-800">
+                      Live Cloud
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Tersambung langsung ke database Supabase Production. Setiap tambah data, ubah, atau hapus akan <strong>langsung tersimpan di cloud</strong>. Digunakan saat rilis di Netlify.
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-emerald-200/60 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-800">
+                    {dbMode === 'production' ? '● Sedang Digunakan' : 'Klik untuk Aktifkan'}
+                  </span>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${dbMode === 'production' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>
+                    {dbMode === 'production' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Mode Staging / Terpisah */}
+              <div
+                onClick={() => setDbMode('staging')}
+                className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                  dbMode === 'staging'
+                    ? 'bg-cyan-50/90 border-cyan-500 shadow-md'
+                    : 'bg-white border-slate-200 hover:border-cyan-300'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-extrabold text-xs text-cyan-950 flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-cyan-600" />
+                      <span>3. Staging / Dev DB Terpisah</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-cyan-200 text-cyan-800">
+                      Testing DB
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Gunakan project Supabase terpisah khusus pengujian cloud. Data production tetap terisolasi dan aman di project aslinya.
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-cyan-200/60 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-cyan-800">
+                    {dbMode === 'staging' ? '● Sedang Digunakan' : 'Klik untuk Aktifkan'}
+                  </span>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${dbMode === 'staging' ? 'border-cyan-600 bg-cyan-600' : 'border-slate-300'}`}>
+                    {dbMode === 'staging' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions & Protection Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-cyan-200/70 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+                <input
+                  type="checkbox"
+                  checked={autoSandbox}
+                  onChange={(e) => setAutoSandbox(e.target.checked)}
+                  className="w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500"
+                />
+                <span>Proteksi Otomatis: Selalu gunakan Mode Sandbox jika aplikasi dibuka di AI Studio (`*.run.app` / `localhost`)</span>
+              </label>
+
+              {isSandbox && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Reset seluruh data pengujian lokal Sandbox ke data demo awal?')) {
+                      resetSandboxToDemoData();
+                    }
+                  }}
+                  className="px-3.5 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Reset Data Uji Coba Sandbox</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1014,6 +1183,14 @@ export const SettingsView: React.FC = () => {
                 Pilih tabel mana saja yang ingin dikosongkan. Data pada penyimpanan lokal dan Supabase Cloud DB untuk tabel tersebut akan dihapus permanen.
               </p>
             </div>
+
+            {/* Sandbox Protection Indicator */}
+            {isSandbox && (
+              <div className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-extrabold flex items-center gap-2 shrink-0">
+                <Shield className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Mode Sandbox: Database Production Aman (Hanya Menghapus Data Lokal)</span>
+              </div>
+            )}
           </div>
 
           {/* Table List Cards Grid */}

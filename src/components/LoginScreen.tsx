@@ -21,7 +21,7 @@ import {
 import { UserAccount } from '../types';
 
 export const LoginScreen: React.FC = () => {
-  const { login, users, showToast } = useApp();
+  const { login, users, showToast, isSandbox, dbMode, setDbMode } = useApp();
   const [step, setStep] = useState<'login' | 'otp'>('login');
   const [nip, setNip] = useState('');
   const [password, setPassword] = useState('');
@@ -131,6 +131,31 @@ export const LoginScreen: React.FC = () => {
 
         {/* Form Body */}
         <div className="p-6 sm:p-8 space-y-6">
+          {/* Mode Proteksi Lingkungan Banner */}
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-xs">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${isSandbox ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+              <div className="leading-tight">
+                <span className="font-extrabold text-slate-800">
+                  {isSandbox ? 'Mode Sandbox AI Studio (Aman)' : 'Mode Supabase Production (Live)'}
+                </span>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {isSandbox
+                    ? 'Proses login & testing terisolasi di browser. Database production aman.'
+                    : 'Terhubung langsung ke database Supabase Cloud Production.'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDbMode(isSandbox ? 'production' : 'sandbox')}
+              className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-amber-300 bg-white hover:bg-amber-100 text-amber-900 transition-colors cursor-pointer shrink-0"
+              title="Ganti Mode Koneksi Database"
+            >
+              {isSandbox ? 'Beralih ke Live DB' : 'Aktifkan Sandbox'}
+            </button>
+          </div>
+
           {step === 'login' ? (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>

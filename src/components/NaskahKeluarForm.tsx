@@ -78,6 +78,7 @@ export const NaskahKeluarForm: React.FC = () => {
     naskahKeluarList,
     setNaskahKeluarList,
     saveNaskahKeluarDirectly,
+    deleteNaskahKeluar,
     jenisNaskahKeluar,
     instansiWilayah,
     klasifikasiSub,
@@ -823,13 +824,10 @@ export const NaskahKeluarForm: React.FC = () => {
 
   // Delete Data
   const handleDelete = async (id: string) => {
-    const updatedList = naskahKeluarList.filter((item) => item.id !== id);
-    setNaskahKeluarList(updatedList);
+    await deleteNaskahKeluar(id);
     if (selectedId === id) {
       handleResetForm();
     }
-    showToast('Data berhasil dihapus dari database', 'info');
-    await syncWithGoogleSheets({ naskahKeluar: updatedList });
   };
 
   // Search handler with Toast messages

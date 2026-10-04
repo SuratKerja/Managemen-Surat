@@ -1,4 +1,4 @@
-import { supabase, resetSupabaseConfigToDefault } from '../lib/supabase';
+import { supabase, resetSupabaseConfigToDefault, isSandboxMode, getDatabaseMode } from '../lib/supabase';
 import {
   UserAccount,
   NaskahMasukItem,
@@ -353,6 +353,12 @@ export const pullFromSupabase = async (isRetry = false): Promise<{
   statusKirim?: string[];
   threadNumberConfig?: ThreadNumberConfig;
 } | null> => {
+  // Jika Mode Sandbox AI Studio aktif, proteksi database production dengan tidak melakukan fetch
+  if (isSandboxMode()) {
+    console.info('🛡️ [SANDBOX MODE] Pull Supabase dilewati. Database Production aman tidak diakses. Memuat data pengujian lokal...');
+    return null;
+  }
+
   try {
     let usersData = await safeFetchTable('users');
 
@@ -397,7 +403,7 @@ export const pullFromSupabase = async (isRetry = false): Promise<{
       result.unitKerjaList = unitData.map((uk: any) => uk.nama_unit || uk.nama).filter(Boolean);
     }
 
-    if (Array.isArray(masukData) && masukData.length > 0) {
+    if (Array.isArray(masukData)) {
       result.naskahMasuk = masukData.map((m: any, idx: number) => ({
         id: safeId(m.id, 'NM', idx, m.nomor_naskah),
         tglTerima: m.tgl_terima || '',
@@ -421,7 +427,7 @@ export const pullFromSupabase = async (isRetry = false): Promise<{
       }));
     }
 
-    if (Array.isArray(keluarData) && keluarData.length > 0) {
+    if (Array.isArray(keluarData)) {
       result.naskahKeluar = keluarData.map((k: any, idx: number) => ({
         id: safeId(k.id, 'NK', idx, k.nomor_naskah),
         tglNaskah: k.tgl_naskah || '',
@@ -446,7 +452,7 @@ export const pullFromSupabase = async (isRetry = false): Promise<{
       }));
     }
 
-    if (Array.isArray(threadData) && threadData.length > 0) {
+    if (Array.isArray(threadData)) {
       result.berkasThreadList = threadData.map((t: any, idx: number) => ({
         id: safeId(t.id, 'TH', idx, t.nomor_thread),
         nomorThread: t.nomor_thread || `TH-${idx + 1}`,
@@ -457,7 +463,7 @@ export const pullFromSupabase = async (isRetry = false): Promise<{
         keterangan: t.keterangan || '',
         status: t.status || 'Aktif',
         unitKerja: t.unit_kerja || 'Sekretariat Utama',
-        lokasiFisik: t.lokasi_fisik || '',
+        lokasiFisik: t.lokasiFisik || '',
         naskahMasukIds: t.naskah_masuk_ids || [],
         naskahKeluarIds: t.naskah_keluar_ids || [],
         history: t.history || [],
@@ -538,6 +544,12 @@ export const pushToSupabase = async (payload: {
   statusKirim?: string[];
   threadNumberConfig?: ThreadNumberConfig;
 }): Promise<{ success: boolean; errors: string[] }> => {
+  // Jika Mode Sandbox AI Studio aktif, proteksi database production dengan tidak melakukan push
+  if (isSandboxMode()) {
+    console.info('🛡️ [SANDBOX MODE] Push Supabase dilewati: Database Production aman tidak tersentuh. Data tersimpan di localStorage browser.');
+    return { success: true, errors: [] };
+  }
+
   const errors: string[] = [];
 
   // Robust safeUpsert: mencoba upsert batch, jika ada kegagalan RLS beri peringatan tunggal
@@ -802,6 +814,15 @@ export const clearTableInSupabase = async (
   tableName: string,
   extraCondition?: { column: string; value: any }
 ): Promise<{ success: boolean; message: string }> => {
+  // Jika Mode Sandbox AI Studio aktif, proteksi database production dengan tidak mengeksekusi delete ke Supabase
+  if (isSandboxMode()) {
+    console.info(`🛡️ [SANDBOX MODE] Clear table '${tableName}' di Supabase diabaikan untuk melindungi Database Production.`);
+    return {
+      success: true,
+      message: `🛡️ Mode Sandbox Aktif: Data tabel lokal telah dikosongkan. Database Supabase Production Anda 100% aman terlindungi.`
+    };
+  }
+
   try {
     let query = supabase.from(tableName).delete();
     if (extraCondition) {
@@ -829,4 +850,27 @@ export const clearTableInSupabase = async (
     };
   }
 };
+
+/**
+ * Fungsi untuk menghapus satu baris data spesifik di Supabase PostgreSQL Database berdasarkan ID
+ */
+export const deleteRecordFromSupabase = async (tableName: string, id: string): Promise<boolean> => {
+  if (isSandboxMode()) {
+    console.info(`🛡️ [SANDBOX MODE] Hapus data ID '${id}' dari '${tableName}' di Supabase diabaikan untuk melindungi Database Production.`);
+    return true;
+  }
+  try {
+    const { error } = await supabase.from(tableName).delete().eq('id', id);
+    if (error) {
+      console.warn(`[Supabase Delete Warning] Gagal menghapus ID '${id}' dari '${tableName}':`, error.message);
+      return false;
+    }
+    console.info(`⚡ [Supabase Delete Success] Berhasil menghapus baris ID '${id}' dari tabel '${tableName}'.`);
+    return true;
+  } catch (err: any) {
+    console.error(`[Supabase Delete Exception] ${tableName}:`, err);
+    return false;
+  }
+};
+
 

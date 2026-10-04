@@ -26,7 +26,7 @@ interface LoginModalProps {
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
-  const { login, users, currentUser, showToast } = useApp();
+  const { login, users, currentUser, showToast, isSandbox, dbMode, setDbMode } = useApp();
   const [step, setStep] = useState<'login' | 'otp'>('login');
   const [nip, setNip] = useState('');
   const [password, setPassword] = useState('');
@@ -138,6 +138,29 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
 
         {/* Form Body */}
         <div className="p-6">
+          {/* Mode Proteksi Lingkungan Banner */}
+          <div className="mb-4 flex items-center justify-between p-3 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-xs">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${isSandbox ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+              <div className="leading-tight">
+                <span className="font-extrabold text-slate-800">
+                  {isSandbox ? 'Mode Sandbox AI Studio (Aman)' : 'Mode Supabase Production (Live)'}
+                </span>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {isSandbox ? 'Data tersimpan di browser lokal tanpa mengubah Supabase Production.' : 'Tersambung ke Supabase Cloud Production.'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDbMode(isSandbox ? 'production' : 'sandbox')}
+              className="px-2 py-1 text-[10px] font-bold rounded-lg border border-amber-300 bg-white hover:bg-amber-100 text-amber-900 transition-colors cursor-pointer shrink-0"
+              title="Ganti Mode Koneksi Database"
+            >
+              {isSandbox ? 'Beralih ke Live DB' : 'Aktifkan Sandbox'}
+            </button>
+          </div>
+
           {currentUser && step === 'login' && (
             <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-xs text-emerald-800">
               <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
